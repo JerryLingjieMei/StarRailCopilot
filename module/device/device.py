@@ -1,6 +1,5 @@
 import collections
 import itertools
-import sys
 
 from module.base.timer import Timer
 from module.device.app_control import AppControl
@@ -14,11 +13,6 @@ from module.exception import (
     RequestHumanTakeover
 )
 from module.logger import logger
-
-if sys.platform == 'win32':
-    from module.device.platform.platform_windows import PlatformWindows as Platform
-else:
-    from module.device.platform.platform_base import PlatformBase as Platform
 
 
 def show_function_call():
@@ -61,7 +55,7 @@ def show_function_call():
     logger.info('Function calls:' + ''.join(func_list))
 
 
-class Device(Screenshot, Control, AppControl, Platform):
+class Device(Screenshot, Control, AppControl):
     _screen_size_checked = False
     detect_record = set()
     click_record = collections.deque(maxlen=30)
@@ -83,11 +77,22 @@ class Device(Screenshot, Control, AppControl, Platform):
                     )
                     raise
 
+        # Auto-fill emulator info
+        if self.config.EmulatorInfo_Emulator == 'auto':
+            _ = self.emulator_instance
+
         self.screenshot_interval_set()
+        self.method_check()
 
         # Auto-select the fastest screenshot method
         if not self.config.is_template_config and self.config.Emulator_ScreenshotMethod == 'auto':
             self.run_simple_screenshot_benchmark()
+
+        # SRC only, use nemu_ipc if available
+        available = self.nemu_ipc_available()
+        logger.attr('nemu_ipc_available', available)
+        if available:
+            self.config.override(Emulator_ScreenshotMethod='nemu_ipc')
 
     def run_simple_screenshot_benchmark(self):
         """
@@ -102,7 +107,23 @@ class Device(Screenshot, Control, AppControl, Platform):
         bench = Benchmark(config=self.config, device=self)
         method = bench.run_simple_screenshot_benchmark()
         # Set
-        self.config.Emulator_ScreenshotMethod = method
+        with self.config.multi_set():
+            self.config.Emulator_ScreenshotMethod = method
+            # if method == 'nemu_ipc':
+            #     self.config.Emulator_ControlMethod = 'nemu_ipc'
+
+    def method_check(self):
+        """
+        Check combinations of screenshot method and control methods
+        """
+        # nemu_ipc should be together
+        # if self.config.Emulator_ScreenshotMethod == 'nemu_ipc' and self.config.Emulator_ControlMethod != 'nemu_ipc':
+        #     logger.warning('When using nemu_ipc, both screenshot and control should use nemu_ipc')
+        #     self.config.Emulator_ControlMethod = 'nemu_ipc'
+        # if self.config.Emulator_ScreenshotMethod != 'nemu_ipc' and self.config.Emulator_ControlMethod == 'nemu_ipc':
+        #     logger.warning('When not using nemu_ipc, both screenshot and control should not use nemu_ipc')
+        #     self.config.Emulator_ControlMethod = 'minitouch'
+        pass
 
     def screenshot(self):
         """
@@ -128,6 +149,8 @@ class Device(Screenshot, Control, AppControl, Platform):
         # stop it during wait
         if self.config.Emulator_ScreenshotMethod == 'scrcpy':
             self._scrcpy_server_stop()
+        if self.config.Emulator_ScreenshotMethod == 'nemu_ipc':
+            self.nemu_ipc_release()
 
     def stuck_record_add(self, button):
         self.detect_record.add(str(button))
