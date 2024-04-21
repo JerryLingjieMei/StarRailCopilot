@@ -19,6 +19,7 @@ from tasks.rogue.route.exit import RogueExit
 
 class RouteBase(RouteBase_, RogueExit, RogueEvent, RogueReward):
     registered_domain_exit = None
+    enroute_add_item = True
 
     def combat_expected_end(self):
         if self.is_page_choose_blessing():
@@ -142,11 +143,9 @@ class RouteBase(RouteBase_, RogueExit, RogueEvent, RogueReward):
 
     def clear_enemy(self, *waypoints):
         waypoints = ensure_waypoints(waypoints)
-        if self.plane.is_rogue_combat:
+        if self.enroute_add_item and self.plane.is_rogue_combat:
             for point in waypoints:
-                if 'item' not in point.expected_enroute:
-                    point.expected_enroute.append('item')
-
+                point.enroute_add_item()
         # Use techniques before enemy
         logger.info('Trying to use technique')
         UseTechniqueUI(self.config, self.device).use_background_technique()
@@ -210,10 +209,9 @@ class RouteBase(RouteBase_, RogueExit, RogueEvent, RogueReward):
         end_point.endpoint_threshold = 1.5
         end_point.interact_radius = 7
         end_point.expected_end.append(self._domain_event_expected_end)
-        if self.plane.is_rogue_occurrence:
+        if self.enroute_add_item and self.plane.is_rogue_occurrence:
             for point in waypoints:
-                if 'item' not in point.expected_enroute:
-                    point.expected_enroute.append('item')
+                point.enroute_add_item()
 
         result = self.goto(*waypoints)
         self.clear_occurrence()
@@ -313,9 +311,9 @@ class RouteBase(RouteBase_, RogueExit, RogueEvent, RogueReward):
         logger.hr('Domain single exit', level=1)
         waypoints = ensure_waypoints(waypoints)
 
-        for point in waypoints:
-            if 'item' not in point.expected_enroute:
-                point.expected_enroute.append('item')
+        if self.enroute_add_item:
+            for point in waypoints:
+                point.enroute_add_item()
 
         end_point = waypoints[-1]
         end_point.min_speed = 'run'

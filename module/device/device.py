@@ -1,6 +1,12 @@
 import collections
 import itertools
 
+# Patch pkg_resources before importing adbutils and uiautomator2
+from module.device.pkg_resources import get_distribution
+
+# Just avoid being removed by import optimization
+_ = get_distribution
+
 from module.base.timer import Timer
 from module.device.app_control import AppControl
 from module.device.control import Control
@@ -88,6 +94,13 @@ class Device(Screenshot, Control, AppControl):
         if not self.config.is_template_config and self.config.Emulator_ScreenshotMethod == 'auto':
             self.run_simple_screenshot_benchmark()
 
+        # Early init
+        if self.config.is_actual_task:
+            if self.config.Emulator_ControlMethod == 'MaaTouch':
+                self.early_maatouch_init()
+            if self.config.Emulator_ControlMethod == 'minitouch':
+                self.early_minitouch_init()
+
         # SRC only, use nemu_ipc if available
         available = self.nemu_ipc_available()
         logger.attr('nemu_ipc_available', available)
@@ -151,6 +164,16 @@ class Device(Screenshot, Control, AppControl):
             self._scrcpy_server_stop()
         if self.config.Emulator_ScreenshotMethod == 'nemu_ipc':
             self.nemu_ipc_release()
+
+    def get_orientation(self):
+        """
+        Callbacks when orientation changed.
+        """
+        o = super().get_orientation()
+
+        self.on_orientation_change_maatouch()
+
+        return o
 
     def stuck_record_add(self, button):
         self.detect_record.add(str(button))

@@ -1,7 +1,7 @@
 import asyncio
 import json
-import re
 import socket
+import threading
 import time
 from functools import wraps
 from typing import List
@@ -10,11 +10,11 @@ import websockets
 from adbutils.errors import AdbError
 from uiautomator2 import _Service
 
-from module.base.decorator import Config, cached_property, del_cached_property
+from module.base.decorator import Config, cached_property, del_cached_property, has_cached_property
 from module.base.timer import Timer
 from module.base.utils import *
 from module.device.connection import Connection
-from module.device.method.utils import RETRY_TRIES, retry_sleep, handle_adb_error
+from module.device.method.utils import RETRY_TRIES, handle_adb_error, retry_sleep
 from module.exception import RequestHumanTakeover, ScriptError
 from module.logger import logger
 
@@ -328,7 +328,7 @@ def retry(func):
                     self.install_uiautomator2()
                     if self._minitouch_port:
                         self.adb_forward_remove(f'tcp:{self._minitouch_port}')
-                    del_cached_property(self, 'minitouch_builder')
+                    del_cached_property(self, '_minitouch_builder')
             # MinitouchOccupiedError: Timeout when connecting to minitouch
             except MinitouchOccupiedError as e:
                 logger.error(e)
@@ -337,7 +337,7 @@ def retry(func):
                     self.restart_atx()
                     if self._minitouch_port:
                         self.adb_forward_remove(f'tcp:{self._minitouch_port}')
-                    del_cached_property(self, 'minitouch_builder')
+                    del_cached_property(self, '_minitouch_builder')
             # AdbError
             except AdbError as e:
                 if handle_adb_error(e):
@@ -349,7 +349,7 @@ def retry(func):
                 logger.error(e)
 
                 def init():
-                    del_cached_property(self, 'minitouch_builder')
+                    del_cached_property(self, '_minitouch_builder')
             # Unknown, probably a trucked image
             except Exception as e:
                 logger.exception(e)
@@ -365,16 +365,43 @@ def retry(func):
 
 class Minitouch(Connection):
     _minitouch_port: int = 0
-    _minitouch_client: socket.socket
+    _minitouch_client: socket.socket = None
     _minitouch_pid: int
     _minitouch_ws: websockets.WebSocketClientProtocol
     max_x: int
     max_y: int
+    _minitouch_init_thread = None
 
     @cached_property
-    def minitouch_builder(self):
+    @retry
+    def _minitouch_builder(self):
         self.minitouch_init()
         return CommandBuilder(self)
+
+    @property
+    def minitouch_builder(self):
+        # Wait init thread
+        if self._minitouch_init_thread is not None:
+            self._minitouch_init_thread.join()
+            del self._minitouch_init_thread
+            self._minitouch_init_thread = None
+
+        return self._minitouch_builder
+
+    def early_minitouch_init(self):
+        """
+        Start a thread to init minitouch connection while the Alas instance just starting to take screenshots
+        This would speed up the first click 0.05s.
+        """
+        if has_cached_property(self, '_minitouch_builder'):
+            return
+
+        def early_minitouch_init_func():
+            _ = self._minitouch_builder
+
+        thread = threading.Thread(target=early_minitouch_init_func, daemon=True)
+        self._minitouch_init_thread = thread
+        thread.start()
 
     @Config.when(DEVICE_OVER_HTTP=False)
     def minitouch_init(self):
@@ -382,6 +409,15 @@ class Minitouch(Connection):
         max_x, max_y = 1280, 720
         max_contacts = 2
         max_pressure = 50
+
+        # Try to close existing stream
+        if self._minitouch_client is not None:
+            try:
+                self._minitouch_client.close()
+            except Exception as e:
+                logger.error(e)
+            del self._minitouch_client
+
         self.get_orientation()
 
         self._minitouch_port = self.adb_forward("localabstract:minitouch")
