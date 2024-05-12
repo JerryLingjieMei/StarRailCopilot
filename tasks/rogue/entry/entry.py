@@ -250,6 +250,9 @@ class RogueEntry(RouteBase, RogueRewardHandler, RoguePathHandler, DungeonUI):
                 self.interval_reset(REWARD_ENTER, interval=2)
                 continue
             if self.match_template_color(LEVEL_CONFIRM, interval=2):
+                if not self.image_color_count(LEVEL_CONFIRM, color=(223, 223, 225), threshold=240, count=50):
+                    self.interval_clear(LEVEL_CONFIRM)
+                    continue
                 self.dungeon_update_stamina()
                 self.check_stop_condition()
                 self.device.click(LEVEL_CONFIRM)
@@ -347,9 +350,9 @@ class RogueEntry(RouteBase, RogueRewardHandler, RoguePathHandler, DungeonUI):
             # Always run
             return
         
-        if self.config.stored.SimulatedUniverseElite.is_expired():
+        if self.config.stored.SimulatedUniverseFarm.is_expired():
             # Expired, reset farming counter
-            self.config.stored.SimulatedUniverseElite.farm_reset()
+            self.config.stored.SimulatedUniverseFarm.set(0)
         
         if self.config.stored.SimulatedUniverse.is_expired():
             # Expired, do rogue
@@ -358,11 +361,11 @@ class RogueEntry(RouteBase, RogueRewardHandler, RoguePathHandler, DungeonUI):
             if self.config.RogueWorld_UseImmersifier and self.config.stored.Immersifier.value > 0:
                 logger.info(
                     'Reached weekly point limit but still have immersifiers left, continue to use them')
-            elif self.config.RogueWorld_WeeklyFarming and self.config.stored.SimulatedUniverseElite.farm_not_complete():
+            elif self.config.RogueWorld_WeeklyFarming and not self.config.stored.SimulatedUniverseFarm.is_full():
                 logger.info(
                     'Reached weekly point limit but still continue to farm materials')
                 logger.attr(
-                    "Farming Counter", self.config.stored.SimulatedUniverseElite.farm_get_remain())
+                    "Farming Counter", self.config.stored.SimulatedUniverseFarm.to_counter())
             else:
                 raise RogueReachedWeeklyPointLimit
         else:

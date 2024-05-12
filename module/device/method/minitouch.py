@@ -86,6 +86,8 @@ def insert_swipe(p0, p3, speed=15, min_distance=10):
         distance = np.linalg.norm(np.subtract(points[1:], points[0]), axis=1)
         mask = np.append(True, distance > min_distance)
         points = np.array(points)[mask].tolist()
+        if len(points) <= 1:
+            points = [p0, p3]
     else:
         points = [p0, p3]
 
@@ -314,12 +316,18 @@ def retry(func):
 
                 def init():
                     self.adb_reconnect()
+                    if self._minitouch_port:
+                        self.adb_forward_remove(f'tcp:{self._minitouch_port}')
+                    del_cached_property(self, '_minitouch_builder')
             # Emulator closed
             except ConnectionAbortedError as e:
                 logger.error(e)
 
                 def init():
                     self.adb_reconnect()
+                    if self._minitouch_port:
+                        self.adb_forward_remove(f'tcp:{self._minitouch_port}')
+                    del_cached_property(self, '_minitouch_builder')
             # MinitouchNotInstalledError: Received empty data from minitouch
             except MinitouchNotInstalledError as e:
                 logger.error(e)
@@ -343,6 +351,9 @@ def retry(func):
                 if handle_adb_error(e):
                     def init():
                         self.adb_reconnect()
+                        if self._minitouch_port:
+                            self.adb_forward_remove(f'tcp:{self._minitouch_port}')
+                        del_cached_property(self, '_minitouch_builder')
                 else:
                     break
             except BrokenPipeError as e:
