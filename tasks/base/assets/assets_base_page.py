@@ -377,15 +377,34 @@ MISSION_CHECK = ButtonWrapper(
         button=(44, 33, 70, 55),
     ),
 )
+PLANNER_CHECK = ButtonWrapper(
+    name='PLANNER_CHECK',
+    share=Button(
+        file='./assets/share/base/page/PLANNER_CHECK.png',
+        area=(39, 47, 74, 74),
+        search=(19, 27, 94, 94),
+        color=(148, 131, 98),
+        button=(39, 47, 74, 74),
+    ),
+)
 ROGUE_CHECK = ButtonWrapper(
     name='ROGUE_CHECK',
-    share=Button(
-        file='./assets/share/base/page/ROGUE_CHECK.png',
-        area=(39, 17, 76, 51),
-        search=(19, 0, 96, 71),
-        color=(81, 74, 76),
-        button=(39, 17, 76, 51),
-    ),
+    share=[
+        Button(
+            file='./assets/share/base/page/ROGUE_CHECK.png',
+            area=(39, 17, 76, 51),
+            search=(19, 0, 96, 71),
+            color=(81, 74, 76),
+            button=(39, 17, 76, 51),
+        ),
+        Button(
+            file='./assets/share/base/page/ROGUE_CHECK.2.png',
+            area=(39, 22, 75, 52),
+            search=(19, 2, 95, 72),
+            color=(110, 100, 79),
+            button=(39, 22, 75, 52),
+        ),
+    ],
 )
 SYNTHESIZE_CHECK = ButtonWrapper(
     name='SYNTHESIZE_CHECK',

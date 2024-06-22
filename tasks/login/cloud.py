@@ -39,15 +39,23 @@ class XPath:
     POPUP_CONFIRM = '//*[@resource-id="com.miHoYo.cloudgames.hkrpg:id/confirmTv"]'
     POPUP_CANCEL = '//*[@resource-id="com.miHoYo.cloudgames.hkrpg:id/cancelTv"]'
     # 畅玩卡的剩余时间
-    REMAIN_SEASON_PASS = '//*[@resource-id="com.miHoYo.cloudgames.hkrpg:id/tvCardStatus"]'
+    REMAIN_SEASON_PASS = '//*[@resource-id="com.miHoYo.cloudgames.hkrpg:id/tvRemindTime"]'
     # 星云币时长：0 分钟
-    REMAIN_PAID = '//*[@resource-id="com.miHoYo.cloudgames.hkrpg:id/tvMiCoinDuration"]'
+    REMAIN_PAID = '//*[@resource-id="com.miHoYo.cloudgames.hkrpg:id/tvCoinCount"]'
     # 免费时长： 600 分钟
-    REMAIN_FREE = '//*[@resource-id="com.miHoYo.cloudgames.hkrpg:id/tvRemainingFreeTime"]'
+    REMAIN_FREE = '//*[@resource-id="com.miHoYo.cloudgames.hkrpg:id/tvFreeTimeCount"]'
     # 主界面的开始游戏按钮
     START_GAME = '//*[@resource-id="com.miHoYo.cloudgames.hkrpg:id/btnLauncher"]'
-    # 排队剩余时间
-    QUEUE_REMAIN = '//*[@resource-id="com.miHoYo.cloudgames.hkrpg:id/tvQueueInfoWaitTimeContent"]'
+    # 请选择排队队列
+    # - 星云币时长快速通道队列 - 普通队列
+    QUEUE_SELECT_TITLE = '//*[@resource-id="com.miHoYo.cloudgames.hkrpg:id/tvSelectQueueTypeTitle"]'
+    QUEUE_SELECT_PRIOR = '//*[@resource-id="com.miHoYo.cloudgames.hkrpg:id/tvOptionPrior"]'
+    QUEUE_SELECT_NORMAL = '//*[@resource-id="com.miHoYo.cloudgames.hkrpg:id/clOptionNormal"]'
+    # 排队中
+    QUEUE_TITLE = '//*[@resource-id="com.miHoYo.cloudgames.hkrpg:id/tvEnqueueDialogTitle"]'
+    # 预计等待时间
+    QUEUE_REMAIN = ('//*[@resource-id="com.miHoYo.cloudgames.hkrpg:id/llEnqueueBody"]'
+                    '//*[@resource-id="com.miHoYo.cloudgames.hkrpg:id/tvSingleValue"]')
 
     """
     游戏界面元素
@@ -61,6 +69,8 @@ class XPath:
     """
     # 悬浮窗
     FLOAT_WINDOW = '//*[@class="android.widget.ImageView"]'
+    # 退出按钮，返回登录页面
+    FLOAT_EXIT = '//*[@resource-id="com.miHoYo.cloudgames.hkrpg:id/iv_exit"]'
     # 弹出侧边栏的 节点信息
     # 将这个区域向右偏移作为退出悬浮窗的按钮
     FLOAT_DELAY = '//*[@resource-id="com.miHoYo.cloudgames.hkrpg:id/tv_node_region"]'
@@ -83,7 +93,7 @@ class LoginAndroidCloud(ModuleBase):
     def _cloud_start(self, skip_first=False):
         """
         Pages:
-            out: START_GAME
+            out: XPath.START_GAME
         """
         logger.hr('Cloud start')
         update_checker = Timer(2)
@@ -129,7 +139,7 @@ class LoginAndroidCloud(ModuleBase):
     def _cloud_get_remain(self):
         """
         Pages:
-            in: START_GAME
+            in: XPath.START_GAME
         """
         regex = re.compile(r'(\d+)')
 
@@ -156,14 +166,14 @@ class LoginAndroidCloud(ModuleBase):
 
         logger.info(f'Cloud remain: season pass {season_pass} days, {paid} min paid, {free} min free')
         with self.config.multi_set():
-            self.config.stored.CloudRemainSeasonPass = season_pass
-            self.config.stored.CloudRemainPaid = paid
-            self.config.stored.CloudRemainFree = free
+            self.config.stored.CloudRemainSeasonPass.value = season_pass
+            self.config.stored.CloudRemainPaid.value = paid
+            self.config.stored.CloudRemainFree.value = free
 
     def _cloud_enter(self, skip_first=False):
         """
         Pages:
-            in: START_GAME
+            in: XPath.START_GAME
             out: page_main
         """
         logger.hr('Cloud enter')
@@ -184,7 +194,7 @@ class LoginAndroidCloud(ModuleBase):
 
             # Queue daemon
             button = self.xpath(XPath.QUEUE_REMAIN)
-            if self.appear(button):
+            if self.appear(button, interval=20):
                 remain = button.text
                 logger.info(f'Queue remain: {remain}')
                 self.device.stuck_record_clear()
@@ -215,6 +225,8 @@ class LoginAndroidCloud(ModuleBase):
                 if title == '连接中断':
                     self.device.click(self.xpath(XPath.POPUP_CONFIRM))
                     continue
+            if self.appear_then_click(XPath.QUEUE_SELECT_NORMAL):
+                continue
 
         # Disable net state display
         if self._cloud_net_state_appear():
@@ -224,6 +236,11 @@ class LoginAndroidCloud(ModuleBase):
         Login(config=self.config, device=self.device).handle_app_login()
 
     def _cloud_setting_enter(self, skip_first=True):
+        """
+        Pages:
+            in: XPath.FLOAT_WINDOW
+            out: XPath.FLOAT_DELAY, setting aside expanded
+        """
         while 1:
             if skip_first:
                 skip_first = False
@@ -237,6 +254,11 @@ class LoginAndroidCloud(ModuleBase):
                 continue
 
     def _cloud_setting_exit(self, skip_first=True):
+        """
+        Pages:
+            in: XPath.FLOAT_DELAY, setting aside expanded
+            out: XPath.FLOAT_WINDOW
+        """
         while 1:
             if skip_first:
                 skip_first = False
@@ -255,6 +277,8 @@ class LoginAndroidCloud(ModuleBase):
 
     def _cloud_setting_disable_net_state(self, skip_first=True):
         """
+        Disable net state display, or will cause detection error on COMBAT_AUTO, COMBAT_2X
+
         Pages:
             in: page_main
             out: page_main
@@ -367,6 +391,106 @@ class LoginAndroidCloud(ModuleBase):
         logger.error('Failed to enter cloud game after 3 trials')
         return False
 
+    def is_in_cloud_page(self):
+        if self.appear(XPath.START_GAME):
+            logger.info('Cloud game is in main page')
+            return True
+        elif self.appear(XPath.FLOAT_DELAY):
+            logger.info('Cloud game is in game with float window expanded')
+            return True
+        elif self.appear(XPath.POPUP_CONFIRM):
+            logger.info('Cloud game have a popup')
+            return True
+
+        logger.info('Not in cloud page')
+        return False
+
+    def cloud_login(self):
+        """
+        Pages:
+            in: Any page in cloud game
+            out: page_main
+        """
+        self.device.dump_hierarchy()
+        if self.is_in_cloud_page():
+            self.cloud_ensure_ingame()
+            return True
+
+        return False
+
+    def cloud_exit(self, skip_first=False):
+        """
+        Exit cloud game, note that actively exit is recommended,
+        don't kill game directly, or will cause 3min extra fee because the sever side is still alive
+
+        Args:
+            skip_first: False by default because cloud_exit() is usually being called after running tasks,
+                existing hierarchy may be outdated
+
+        Pages:
+            in: XPath.FLOAT_WINDOW
+            out: XPath.START_GAME
+        """
+        logger.hr('Cloud exit')
+        if not self.device.app_is_running():
+            logger.info('App is not running, no need to exit')
+            return
+
+        while 1:
+            if skip_first:
+                skip_first = False
+            else:
+                self.device.dump_hierarchy()
+
+            # End
+            if self.appear(XPath.START_GAME):
+                break
+
+            if self.appear_then_click(XPath.FLOAT_WINDOW, interval=3):
+                continue
+            if self.appear_then_click(XPath.FLOAT_EXIT, interval=3):
+                continue
+            # 提示
+            # 是否确认退出游戏
+            # - 继续游戏 - 退出游戏
+            if self.appear_then_click(XPath.POPUP_CONFIRM, interval=3):
+                continue
+
+        # Update remain
+        if self.config.stored.CloudRemainSeasonPass:
+            self._cloud_get_remain()
+        else:
+            # Wait cloud remain reduce
+            # Value wasn't updated that fast at the time re-entering XPath.START_GAME
+            skip_first = True
+            timeout = Timer(2, count=4).start()
+            prev = [
+                self.config.stored.CloudRemainSeasonPass.value,
+                self.config.stored.CloudRemainPaid.value,
+                self.config.stored.CloudRemainFree.value,
+            ]
+            with self.config.multi_set():
+                while 1:
+                    if skip_first:
+                        skip_first = False
+                    else:
+                        self.device.dump_hierarchy()
+
+                    # End
+                    if timeout.reached():
+                        logger.warning('Wait cloud remain reduce timeout')
+                        break
+                    self._cloud_get_remain()
+                    current = [
+                        self.config.stored.CloudRemainSeasonPass.value,
+                        self.config.stored.CloudRemainPaid.value,
+                        self.config.stored.CloudRemainFree.value,
+                    ]
+                    if current != prev:
+                        break
+
+        logger.info('Cloud exited')
+
     def cloud_keep_alive(self):
         """
         Randomly do something to prevent being kicked
@@ -385,5 +509,5 @@ class LoginAndroidCloud(ModuleBase):
 
 if __name__ == '__main__':
     self = LoginAndroidCloud('src')
-    self.cloud_ensure_ingame()
+    self.cloud_login()
     self.cloud_keep_alive()

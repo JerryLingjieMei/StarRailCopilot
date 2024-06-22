@@ -15,7 +15,7 @@ from tasks.assignment.assets.assets_assignment_ui import *
 from tasks.assignment.keywords import *
 from tasks.base.assets.assets_base_page import ASSIGNMENT_CHECK
 from tasks.base.ui import UI
-from tasks.dungeon.ui import DungeonTabSwitch as Switch
+from tasks.dungeon.ui import DungeonTabSwitch
 
 
 class AssignmentStatus(Enum):
@@ -40,7 +40,8 @@ class AssignmentOcr(Ocr):
             (KEYWORDS_ASSIGNMENT_ENTRY.Legend_of_the_Puppet_Master, '^师传说'),
             (KEYWORDS_ASSIGNMENT_ENTRY.The_Wages_of_Humanity, '[赠]养人类'),
             (KEYWORDS_ASSIGNMENT_EVENT_ENTRY.Car_Thief, '.*的偷车贼.*'),
-            (KEYWORDS_ASSIGNMENT_EVENT_ENTRY.Synesthesia_Beacon_Function_Iteration, '联觉信标功能[送]代'),
+            (KEYWORDS_ASSIGNMENT_EVENT_ENTRY.Synesthesia_Beacon_Function_Iteration,
+             '联觉信标功能[送]代'),
         ],
         'en': [
             # (KEYWORDS_ASSIGNMENT_EVENT_ENTRY.Food_Improvement_Plan.name,
@@ -101,7 +102,11 @@ class AssignmentOcr(Ocr):
         return matched
 
 
-ASSIGNMENT_GROUP_SWITCH = Switch(
+class AssignmentGroupSwitch(DungeonTabSwitch):
+    SEARCH_BUTTON = GROUP_SEARCH
+
+
+ASSIGNMENT_GROUP_SWITCH = AssignmentGroupSwitch(
     'AssignmentGroupSwitch',
     is_selector=True
 )
@@ -150,16 +155,23 @@ class AssignmentUI(UI):
         Args:
             group (AssignmentGroup):
 
+        Returns:
+            bool: If group switched
+
         Examples:
             self = AssignmentUI('src')
             self.device.screenshot()
             self.goto_group(KEYWORDS_ASSIGNMENT_GROUP.Character_Materials)
         """
-        if ASSIGNMENT_GROUP_SWITCH.get(self) == group:
-            return
         logger.hr('Assignment group goto', level=3)
         if ASSIGNMENT_GROUP_SWITCH.set(group, self):
             self._wait_until_entry_loaded()
+            self._wait_until_correct_entry_loaded(group)
+            return True
+        else:
+            if not ASSIGNMENT_ENTRY_LIST.cur_buttons:
+                ASSIGNMENT_ENTRY_LIST.load_rows(self)
+            return False
 
     def goto_entry(self, entry: AssignmentEntry, insight: bool = True):
         """
@@ -181,8 +193,11 @@ class AssignmentUI(UI):
                     return
             raise ScriptError(err_msg)
         else:
-            self.goto_group(entry.group)
-            ASSIGNMENT_ENTRY_LIST.select_row(entry, self, insight=insight)
+            if self.goto_group(entry.group):
+                # Already insight in goto_group() - _wait_until_correct_entry_loaded()
+                ASSIGNMENT_ENTRY_LIST.select_row(entry, self, insight=False)
+            else:
+                ASSIGNMENT_ENTRY_LIST.select_row(entry, self, insight=insight)
 
     def _wait_until_group_loaded(self):
         skip_first_screenshot = True
@@ -213,9 +228,37 @@ class AssignmentUI(UI):
             if timeout.reached():
                 logger.warning('Wait entry loaded timeout')
                 break
+            if self.appear(EVENT_COMPLETED):
+                logger.info('Event completed')
+                break
             if self.appear(ASSIGNMENT_CHECK) and \
-                    self.image_color_count(ENTRY_LOADED, (35, 35, 35), count=800):
+                    self.image_color_count(ENTRY_LOADED, (35, 35, 35), count=400):
                 logger.info('Entry loaded')
+                break
+
+    def _wait_until_correct_entry_loaded(self, group: AssignmentGroup):
+        skip_first_screenshot = True
+        timeout = Timer(3, count=3).start()
+        while 1:
+            if skip_first_screenshot:
+                skip_first_screenshot = False
+            else:
+                self.device.screenshot()
+
+            if timeout.reached():
+                logger.warning('Wait correct entry loaded timeout')
+                break
+            if isinstance(group, AssignmentEventGroup) and self.appear(EVENT_COMPLETED):
+                logger.info('Correct entry loaded')
+                ASSIGNMENT_ENTRY_LIST.cur_buttons = []
+                break
+
+            ASSIGNMENT_ENTRY_LIST.load_rows(self)
+            if ASSIGNMENT_ENTRY_LIST.cur_buttons and all(
+                x.matched_keyword.group == group
+                for x in ASSIGNMENT_ENTRY_LIST.cur_buttons
+            ):
+                logger.info('Correct entry loaded')
                 break
 
     @property
@@ -279,7 +322,7 @@ class AssignmentUI(UI):
         """
         Iterate entries from top to bottom
         """
-        ASSIGNMENT_ENTRY_LIST.load_rows(main=self)
+        # load_rows is done in goto_group already
         # Freeze ocr results here
         yield from [
             button.matched_keyword

@@ -43,17 +43,17 @@ ASSIGNMENT_STARTED_CHECK = ButtonWrapper(
     share=[
         Button(
             file='./assets/share/assignment/dispatch/ASSIGNMENT_STARTED_CHECK.png',
-            area=(542, 412, 1156, 422),
-            search=(522, 392, 1176, 442),
-            color=(232, 230, 226),
-            button=(542, 412, 1156, 422),
+            area=(509, 317, 525, 383),
+            search=(489, 297, 545, 403),
+            color=(231, 231, 225),
+            button=(509, 317, 525, 383),
         ),
         Button(
             file='./assets/share/assignment/dispatch/ASSIGNMENT_STARTED_CHECK.2.png',
-            area=(542, 412, 1156, 422),
-            search=(522, 392, 1176, 442),
-            color=(254, 244, 221),
-            button=(542, 412, 1156, 422),
+            area=(509, 317, 525, 383),
+            search=(489, 297, 545, 403),
+            color=(253, 243, 219),
+            button=(509, 317, 525, 383),
         ),
     ],
 )

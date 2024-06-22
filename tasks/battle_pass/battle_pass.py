@@ -19,6 +19,7 @@ from tasks.base.page import page_battle_pass, page_main
 from tasks.base.ui import UI
 from tasks.battle_pass.assets.assets_battle_pass import *
 from tasks.battle_pass.keywords import *
+from tasks.item.assets.assets_item_ui import SWITCH_CLICK
 
 
 class BattlePassTab(Switch):
@@ -42,6 +43,14 @@ SWITCH_BATTLE_PASS_TAB.add_state(
 
 
 class BattlePassMissionTab(Switch):
+    def add_state(self, state, check_button, click_button=None):
+        if click_button is not None:
+            # Limit click_button.button
+            left = SWITCH_CLICK.area[0]
+            for button in click_button.buttons:
+                button._button = (left, button._button[1], button._button[2], button._button[3])
+        return super().add_state(state, check_button, click_button)
+
     def get(self, main):
         """
         Args:
@@ -335,7 +344,7 @@ class BattlePassUI(UI):
 
         # Convert quest keyword to stored object
         dic_quest_to_stored = {
-            KEYWORDS_BATTLE_PASS_QUEST.Complete_Simulated_Universe_1_times:
+            KEYWORDS_BATTLE_PASS_QUEST.Complete_Divergent_Universe_or_Simulated_Universe_1_times:
                 self.config.stored.BattlePassSimulatedUniverse,
             KEYWORDS_BATTLE_PASS_QUEST.Clear_Calyx_1_times:
                 self.config.stored.BattlePassQuestCalyx,

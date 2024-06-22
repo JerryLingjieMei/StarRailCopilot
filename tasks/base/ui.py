@@ -57,6 +57,12 @@ class UI(MainPage):
         def rotation_check():
             self.device.get_orientation()
 
+        @run_once
+        def cloud_login():
+            if self.config.is_cloud_game:
+                from tasks.login.login import Login
+                Login(config=self.config, device=self.device).cloud_login()
+
         timeout = Timer(10, count=20).start()
         while 1:
             if skip_first_screenshot:
@@ -90,7 +96,8 @@ class UI(MainPage):
             if self.handle_popup_confirm():
                 timeout.reset()
                 continue
-            if self.appear_then_click(LOGIN_CONFIRM, interval=5):
+            if self.is_in_login_confirm(interval=5):
+                self.device.click(LOGIN_CONFIRM)
                 timeout.reset()
                 continue
             if self.appear(MAP_LOADING, interval=5):
@@ -101,6 +108,7 @@ class UI(MainPage):
             app_check()
             minicap_check()
             rotation_check()
+            cloud_login()
 
         # Unknown page, need manual switching
         logger.warning("Unknown ui page")
@@ -162,7 +170,8 @@ class UI(MainPage):
                 continue
             if self.handle_popup_confirm():
                 continue
-            if self.appear_then_click(LOGIN_CONFIRM, interval=5):
+            if self.is_in_login_confirm(interval=5):
+                self.device.click(LOGIN_CONFIRM)
                 continue
 
         # Reset connection
@@ -307,11 +316,11 @@ class UI(MainPage):
             return False
 
         appear = False
-        if MAIN_GOTO_CHARACTER.match_template_binary(self.device.image):
+        if MAIN_GOTO_CHARACTER.match_template_luma(self.device.image):
             if self.image_color_count(MAIN_GOTO_CHARACTER, color=(235, 235, 235), threshold=234, count=400):
                 appear = True
         if not appear:
-            if MAP_EXIT.match_template_binary(self.device.image):
+            if MAP_EXIT.match_template_luma(self.device.image):
                 if self.image_color_count(MAP_EXIT, color=(235, 235, 235), threshold=221, count=50):
                     appear = True
 
@@ -320,6 +329,20 @@ class UI(MainPage):
 
         return appear
 
+    def is_in_login_confirm(self, interval=0):
+        self.device.stuck_record_add(LOGIN_CONFIRM)
+
+        if interval and not self.interval_is_reached(LOGIN_CONFIRM, interval=interval):
+            return False
+
+        appear = LOGIN_CONFIRM.match_template_luma(self.device.image)
+
+        if appear and interval:
+            self.interval_reset(LOGIN_CONFIRM, interval=interval)
+
+        return appear
+
+
     def is_in_map_exit(self, interval=0):
         self.device.stuck_record_add(MAP_EXIT)
 
@@ -327,7 +350,7 @@ class UI(MainPage):
             return False
 
         appear = False
-        if MAP_EXIT.match_template_binary(self.device.image):
+        if MAP_EXIT.match_template_luma(self.device.image):
             if self.image_color_count(MAP_EXIT, color=(235, 235, 235), threshold=221, count=50):
                 appear = True
 

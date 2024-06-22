@@ -15,7 +15,7 @@ from tasks.base.page import page_guide, page_item, page_main, page_rogue
 from tasks.dungeon.keywords import DungeonList
 from tasks.dungeon.keywords.dungeon import Simulated_Universe_World_1
 from tasks.dungeon.state import OcrSimUniPoint
-from tasks.dungeon.ui import DungeonUI
+from tasks.dungeon.ui_rogue import DungeonRogueUI
 from tasks.forgotten_hall.assets.assets_forgotten_hall_ui import TELEPORT
 from tasks.rogue.assets.assets_rogue_entry import (
     LEVEL_CONFIRM,
@@ -103,7 +103,7 @@ class OcrRogueWorld(Ocr):
         return 0
 
 
-class RogueEntry(RouteBase, RogueRewardHandler, RoguePathHandler, DungeonUI):
+class RogueEntry(RouteBase, RogueRewardHandler, RoguePathHandler, DungeonRogueUI):
     def _rogue_world_wait(self, skip_first_screenshot=True):
         """
         Wait is_page_rogue_main() fully loaded
@@ -164,6 +164,11 @@ class RogueEntry(RouteBase, RogueRewardHandler, RoguePathHandler, DungeonUI):
             if interval.reached() and self.is_page_rogue_main():
                 self.device.click(THEME_SWITCH)
                 interval.reset()
+            # Weekly refresh popup
+            if self.appear_then_click(REWARD_CLOSE, interval=2):
+                continue
+            if self.handle_reward():
+                continue
 
     def _rogue_world_set(self, world: int | DungeonList, skip_first_screenshot=True):
         """
@@ -303,7 +308,7 @@ class RogueEntry(RouteBase, RogueRewardHandler, RoguePathHandler, DungeonUI):
     def _rogue_teleport(self, skip_first_screenshot=True):
         """
         Pages:
-            in: page_guide, Survival_Index, Simulated_Universe
+            in: page_guide, Simulated_Universe, Simulated_Universe
             out: page_rogue, is_page_rogue_main()
         """
         logger.info('Rogue teleport')
@@ -318,12 +323,18 @@ class RogueEntry(RouteBase, RogueRewardHandler, RoguePathHandler, DungeonUI):
             if self.ui_page_appear(page_rogue):
                 break
 
+            # Additional
             if self.appear_then_click(REWARD_CLOSE, interval=2):
                 continue
+            # Popup that confirm character switch
+            if self.handle_popup_confirm():
+                continue
+            # Click
             if self.appear(page_guide.check_button, interval=2):
                 buttons = TELEPORT.match_multi_template(self.device.image)
                 if len(buttons):
-                    buttons = sorted(buttons, key=lambda x: x.area[1])
+                    # 2.3, classic rogue is always at bottom
+                    buttons = sorted(buttons, key=lambda x: x.area[1], reverse=True)
                     self.device.click(buttons[0])
                     continue
 
@@ -350,11 +361,11 @@ class RogueEntry(RouteBase, RogueRewardHandler, RoguePathHandler, DungeonUI):
         if self.config.RogueDebug_DebugMode:
             # Always run
             return
-        
+
         if self.config.stored.SimulatedUniverseFarm.is_expired():
             # Expired, reset farming counter
             self.config.stored.SimulatedUniverseFarm.set(0)
-        
+
         if self.config.stored.SimulatedUniverse.is_expired():
             # Expired, do rogue
             pass
@@ -367,6 +378,9 @@ class RogueEntry(RouteBase, RogueRewardHandler, RoguePathHandler, DungeonUI):
                     'Reached weekly point limit but still continue to farm materials')
                 logger.attr(
                     "Farming Counter", self.config.stored.SimulatedUniverseFarm.to_counter())
+                if self.config.is_cloud_game and not self.config.stored.CloudRemainSeasonPass.value:
+                    logger.warning('Running WeeklyFarming on cloud game without season pass may cause fee, skip')
+                    raise RogueReachedWeeklyPointLimit
             else:
                 raise RogueReachedWeeklyPointLimit
         else:

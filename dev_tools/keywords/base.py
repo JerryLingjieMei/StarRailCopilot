@@ -153,12 +153,15 @@ class GenerateKeyword:
     def iter_rows(self) -> t.Iterable[dict]:
         for keyword in self.iter_keywords():
             keyword = self.format_keywords(keyword)
+            if not keyword:
+                continue
             yield keyword
 
     def format_keywords(self, keyword: dict) -> dict | None:
         base = self.keyword_format.copy()
         text_id = keyword.pop('text_id')
         if text_id is None:
+            logger.warning(f'Empty text_id in {keyword}')
             return
         # id
         self.keyword_index += 1
@@ -169,6 +172,9 @@ class GenerateKeyword:
         _, name = self.find_keyword(text_id, lang='en')
         name = self.convert_name(name, keyword=base)
         base['name'] = name
+        if not name:
+            logger.warning(f'Empty name for {keyword}')
+            return None
         # Translations
         for lang in UI_LANGUAGES:
             value = self.find_keyword(text_id, lang=lang)[1]
@@ -191,3 +197,20 @@ class GenerateKeyword:
 
     def __call__(self, *args, **kwargs):
         self.generate()
+
+
+class ShareData(GenerateKeyword):
+    @cached_property
+    def GameplayGuideData(self):
+        return self.read_file('./ExcelOutput/GameplayGuideData.json')
+
+    @cached_property
+    def MappingInfo(self):
+        return self.read_file('./ExcelOutput/MappingInfo.json')
+
+    @cached_property
+    def ItemConfig(self):
+        return self.read_file('./ExcelOutput/ItemConfig.json')
+
+
+SHARE_DATA = ShareData()
